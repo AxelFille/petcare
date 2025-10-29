@@ -1,4 +1,11 @@
+import { type ClassValue, clsx } from "clsx"
+import { twMerge } from "tailwind-merge"
 import { PlanType, PLAN_FEATURES } from './types'
+
+// Função cn para combinar classes CSS (necessária para componentes shadcn/ui)
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
 
 // Utilitários para verificação de funcionalidades por plano
 export const hasFeature = (userPlan: PlanType, feature: string): boolean => {
