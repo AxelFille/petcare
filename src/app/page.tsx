@@ -23,22 +23,26 @@ import {
   Mail
 } from 'lucide-react';
 import { createPaymentPreference } from '@/lib/mercadopago';
+import { loginUser, registerUser, checkEmailExists, type LoginCredentials, type RegisterData } from '@/lib/auth';
 
 export default function LandingPage() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
-  const [loginData, setLoginData] = useState({ email: '', password: '' });
-  const [registerData, setRegisterData] = useState({
+  const [loginData, setLoginData] = useState<LoginCredentials>({ email: '', password: '' });
+  const [registerData, setRegisterData] = useState<RegisterData>({
     name: '',
     email: '',
     password: '',
     confirmPassword: '',
-    type: 'vet' as 'vet' | 'clinic'
+    user_type: 'vet'
   });
   const [loginError, setLoginError] = useState('');
+  const [registerError, setRegisterError] = useState('');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
 
   const plans = [
     {
@@ -149,52 +153,83 @@ export default function LandingPage() {
     }
   ];
 
-  // Credenciais válidas para demonstração
-  const validCredentials = [
-    { email: 'admin@petcare.com', password: '123456' },
-    { email: 'vet@petcare.com', password: 'vet123' },
-    { email: 'demo@petcare.com', password: 'demo123' }
-  ];
-
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
+    setIsLoggingIn(true);
 
-    // Validar credenciais
-    const isValid = validCredentials.some(
-      cred => cred.email === loginData.email && cred.password === loginData.password
-    );
-
-    if (isValid) {
-      // Login bem-sucedido - salvar dados do usuário
-      localStorage.setItem('petcare_user', JSON.stringify({
-        email: loginData.email,
-        name: loginData.email.split('@')[0],
-        loginTime: new Date().toISOString(),
-        plan: 'VetBásico' // Plano padrão
-      }));
-      window.location.href = '/dashboard';
-    } else {
-      setLoginError('Email ou senha incorretos. Tente: admin@petcare.com / 123456');
+    try {
+      const user = await loginUser(loginData);
+      
+      if (user) {
+        // Login bem-sucedido - salvar dados do usuário
+        localStorage.setItem('petcare_user', JSON.stringify({
+          ...user,
+          loginTime: new Date().toISOString()
+        }));
+        window.location.href = '/dashboard';
+      } else {
+        setLoginError('Email ou senha incorretos. Verifique suas credenciais.');
+      }
+    } catch (error) {
+      console.error('Erro no login:', error);
+      setLoginError('Erro ao fazer login. Tente novamente.');
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    setRegisterError('');
+    setIsRegistering(true);
+
+    // Validações
     if (registerData.password !== registerData.confirmPassword) {
-      alert('Senhas não coincidem');
+      setRegisterError('As senhas não coincidem');
+      setIsRegistering(false);
       return;
     }
-    
-    // Simular cadastro bem-sucedido
-    localStorage.setItem('petcare_user', JSON.stringify({
-      email: registerData.email,
-      name: registerData.name,
-      type: registerData.type,
-      loginTime: new Date().toISOString(),
-      plan: 'VetBásico' // Plano gratuito inicial
-    }));
-    window.location.href = '/dashboard';
+
+    if (registerData.password.length < 6) {
+      setRegisterError('A senha deve ter pelo menos 6 caracteres');
+      setIsRegistering(false);
+      return;
+    }
+
+    try {
+      // Verificar se email já existe
+      const emailExists = await checkEmailExists(registerData.email);
+      if (emailExists) {
+        setRegisterError('Este email já está cadastrado');
+        setIsRegistering(false);
+        return;
+      }
+
+      // Registrar usuário
+      const user = await registerUser({
+        name: registerData.name,
+        email: registerData.email,
+        password: registerData.password,
+        user_type: registerData.user_type
+      });
+
+      if (user) {
+        // Cadastro bem-sucedido
+        localStorage.setItem('petcare_user', JSON.stringify({
+          ...user,
+          loginTime: new Date().toISOString()
+        }));
+        window.location.href = '/dashboard';
+      } else {
+        setRegisterError('Erro ao criar conta. Tente novamente.');
+      }
+    } catch (error) {
+      console.error('Erro no registro:', error);
+      setRegisterError('Erro ao criar conta. Tente novamente.');
+    } finally {
+      setIsRegistering(false);
+    }
   };
 
   const handlePlanSelect = async (plan: any) => {
@@ -640,7 +675,7 @@ export default function LandingPage() {
                   value={loginData.email}
                   onChange={(e) => setLoginData({...loginData, email: e.target.value})}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="admin@petcare.com"
+                  placeholder="seu@email.com"
                 />
               </div>
               
@@ -654,22 +689,23 @@ export default function LandingPage() {
                   value={loginData.password}
                   onChange={(e) => setLoginData({...loginData, password: e.target.value})}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="123456"
+                  placeholder="••••••••"
                 />
-              </div>
-              
-              <div className="text-sm text-gray-600 bg-blue-50 p-3 rounded-lg">
-                <p className="font-medium mb-1">Credenciais de demonstração:</p>
-                <p>• admin@petcare.com / 123456</p>
-                <p>• vet@petcare.com / vet123</p>
-                <p>• demo@petcare.com / demo123</p>
               </div>
               
               <button
                 type="submit"
-                className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors"
+                disabled={isLoggingIn}
+                className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
               >
-                Entrar
+                {isLoggingIn ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Entrando...
+                  </>
+                ) : (
+                  'Entrar'
+                )}
               </button>
             </form>
             
@@ -699,12 +735,21 @@ export default function LandingPage() {
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold text-gray-900">Cadastrar</h2>
               <button
-                onClick={() => setShowRegister(false)}
+                onClick={() => {
+                  setShowRegister(false);
+                  setRegisterError('');
+                }}
                 className="text-gray-400 hover:text-gray-600"
               >
                 <X className="w-6 h-6" />
               </button>
             </div>
+            
+            {registerError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-700 text-sm">{registerError}</p>
+              </div>
+            )}
             
             <form onSubmit={handleRegister} className="space-y-4">
               <div>
@@ -740,8 +785,8 @@ export default function LandingPage() {
                   Tipo de Conta
                 </label>
                 <select
-                  value={registerData.type}
-                  onChange={(e) => setRegisterData({...registerData, type: e.target.value as 'vet' | 'clinic'})}
+                  value={registerData.user_type}
+                  onChange={(e) => setRegisterData({...registerData, user_type: e.target.value as 'vet' | 'clinic'})}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="vet">Veterinário Autônomo</option>
@@ -779,9 +824,17 @@ export default function LandingPage() {
               
               <button
                 type="submit"
-                className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors"
+                disabled={isRegistering}
+                className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
               >
-                Criar Conta
+                {isRegistering ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Criando conta...
+                  </>
+                ) : (
+                  'Criar Conta'
+                )}
               </button>
             </form>
             
@@ -792,6 +845,7 @@ export default function LandingPage() {
                   onClick={() => {
                     setShowRegister(false);
                     setShowLogin(true);
+                    setRegisterError('');
                   }}
                   className="text-blue-600 hover:text-blue-700 font-medium"
                 >
