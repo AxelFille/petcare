@@ -31,7 +31,12 @@ async function createPaymentPreference(plan, userEmail) {
             })
         });
         if (!response.ok) {
-            const errorData = await response.json().catch(()=>({}));
+            let errorData = {};
+            try {
+                errorData = await response.json();
+            } catch (parseError) {
+                console.error('Erro ao parsear resposta de erro:', parseError);
+            }
             // Tratamento específico para diferentes códigos de erro
             if (response.status === 500) {
                 throw new Error(errorData.error || 'Erro interno do servidor. Tente novamente.');
@@ -56,7 +61,7 @@ async function createPaymentPreference(plan, userEmail) {
         console.error('Erro ao criar preferência:', error);
         if (error instanceof Error) {
             // Se for erro de rede, dar uma mensagem mais amigável
-            if (error.message.includes('fetch')) {
+            if (error.message.includes('fetch') || error.name === 'TypeError') {
                 throw new Error('Erro de conexão. Verifique sua internet e tente novamente.');
             }
             throw error;

@@ -6,8 +6,17 @@ export interface PlanData {
   description: string;
 }
 
+// Interface para resposta da API
+interface PaymentPreferenceResponse {
+  success: boolean;
+  init_point?: string;
+  sandbox_init_point?: string;
+  error?: string;
+  id?: string;
+}
+
 // Função para uso no cliente (frontend) - APENAS chamada para API
-export async function createPaymentPreference(plan: PlanData, userEmail?: string) {
+export async function createPaymentPreference(plan: PlanData, userEmail?: string): Promise<PaymentPreferenceResponse> {
   try {
     // Validar dados antes de enviar
     if (!plan || !plan.name || typeof plan.priceValue !== 'number') {
@@ -25,7 +34,13 @@ export async function createPaymentPreference(plan: PlanData, userEmail?: string
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+      let errorData: any = {};
+      
+      try {
+        errorData = await response.json();
+      } catch (parseError) {
+        console.error('Erro ao parsear resposta de erro:', parseError);
+      }
       
       // Tratamento específico para diferentes códigos de erro
       if (response.status === 500) {
@@ -39,7 +54,7 @@ export async function createPaymentPreference(plan: PlanData, userEmail?: string
       }
     }
 
-    const data = await response.json();
+    const data: PaymentPreferenceResponse = await response.json();
     
     console.log('Resposta da API:', data);
     
@@ -57,7 +72,7 @@ export async function createPaymentPreference(plan: PlanData, userEmail?: string
     
     if (error instanceof Error) {
       // Se for erro de rede, dar uma mensagem mais amigável
-      if (error.message.includes('fetch')) {
+      if (error.message.includes('fetch') || error.name === 'TypeError') {
         throw new Error('Erro de conexão. Verifique sua internet e tente novamente.');
       }
       throw error;

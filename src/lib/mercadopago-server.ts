@@ -8,7 +8,7 @@ export interface PlanData {
 }
 
 // Função para obter token com validação
-const getAccessToken = () => {
+const getAccessToken = (): string => {
   const token = process.env.MERCADOPAGO_ACCESS_TOKEN;
   if (!token) {
     console.error('MERCADOPAGO_ACCESS_TOKEN não encontrado nas variáveis de ambiente');
@@ -26,15 +26,14 @@ const getAccessToken = () => {
 };
 
 // Função para criar cliente MercadoPago com configuração otimizada
-const createMercadoPagoClient = () => {
+const createMercadoPagoClient = (): Preference => {
   try {
     const accessToken = getAccessToken();
     
     const client = new MercadoPagoConfig({
       accessToken,
       options: {
-        timeout: 30000, // Aumentar timeout para 30 segundos
-        retries: 3, // Aumentar tentativas
+        timeout: 30000,
       }
     });
     
@@ -65,7 +64,6 @@ export async function createPreference(plan: PlanData, userEmail?: string) {
       if (process.env.VERCEL_URL) {
         baseUrl = `https://${process.env.VERCEL_URL}`;
       } else if (process.env.NODE_ENV === 'production') {
-        // Em produção, usar um domínio padrão se não configurado
         baseUrl = 'https://petcare-plus.vercel.app';
       } else {
         baseUrl = 'http://localhost:3000';
@@ -96,8 +94,8 @@ export async function createPreference(plan: PlanData, userEmail?: string) {
       },
       auto_return: 'approved' as const,
       payment_methods: {
-        excluded_payment_methods: [],
-        excluded_payment_types: [],
+        excluded_payment_methods: [] as any[],
+        excluded_payment_types: [] as any[],
         installments: 12,
       },
       notification_url: `${baseUrl}/api/webhooks/mercadopago`,
@@ -105,7 +103,7 @@ export async function createPreference(plan: PlanData, userEmail?: string) {
       external_reference: `petcare-${plan.name.toLowerCase()}-${Date.now()}`,
       expires: true,
       expiration_date_from: new Date().toISOString(),
-      expiration_date_to: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 horas
+      expiration_date_to: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     };
 
     console.log('Dados da preferência preparados:', {
@@ -115,17 +113,17 @@ export async function createPreference(plan: PlanData, userEmail?: string) {
       baseUrl
     });
     
-    // Criar preferência com retry melhorado
-    let response;
-    let lastError;
+    // Criar preferência com retry manual
+    let response: any;
+    let lastError: any;
     
-    for (let attempt = 1; attempt <= 5; attempt++) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         console.log(`Tentativa ${attempt} de criar preferência...`);
         
         // Adicionar delay progressivo entre tentativas
         if (attempt > 1) {
-          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000); // Backoff exponencial, máx 10s
+          const delay = Math.min(1000 * attempt, 5000);
           console.log(`Aguardando ${delay}ms antes da tentativa ${attempt}...`);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
@@ -149,7 +147,7 @@ export async function createPreference(plan: PlanData, userEmail?: string) {
         }
         
         // Se for a última tentativa, lançar erro
-        if (attempt === 5) {
+        if (attempt === 3) {
           console.error('Todas as tentativas falharam');
           break;
         }
@@ -157,7 +155,7 @@ export async function createPreference(plan: PlanData, userEmail?: string) {
     }
     
     if (!response) {
-      throw lastError || new Error('Falha ao criar preferência após 5 tentativas');
+      throw lastError || new Error('Falha ao criar preferência após 3 tentativas');
     }
     
     // Validar resposta
